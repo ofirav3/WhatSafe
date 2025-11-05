@@ -9,7 +9,7 @@ FastAPI microservice for Whatsafe UI:
 
 from typing import Dict, Any  # Type hints for clarity
 
-from fastapi import FastAPI, UploadFile, File  # FastAPI web framework + file upload support
+from fastapi import FastAPI, UploadFile, File, Form  # FastAPI web framework + file upload support
 from fastapi.responses import HTMLResponse    # For HTML responses
 import httpx                                  # HTTP client for calling the detection microservice
 import pandas as pd                           # For clean tables
@@ -23,12 +23,16 @@ app = FastAPI(
 )
 
 
-def render_result_html(result: Dict[str, Any]) -> str:
+def render_result_html(result: Dict[str, Any], ai_result: Dict[str, Any] = None) -> str:
     """
     Build a minimal HTML page to display the analysis result.
 
     This is intentionally simple and does not use templates,
     but it is enough to demonstrate a clear UI.
+    
+    Args:
+        result: Keyword-based analysis result
+        ai_result: Optional AI-powered analysis result from OpenAI
     """
     risk = result["risk_signals"]["boycott_risk"]
     label = result["label"]
@@ -78,6 +82,14 @@ def render_result_html(result: Dict[str, Any]) -> str:
         ".footer { margin-top:20px; display:flex; gap:12px; }",
         ".btn { color:var(--text); text-decoration:none; padding:10px 14px; border-radius:10px; border:1px solid #1f2a44; background:#0b1324; }",
         ".btn:hover { background:#0c1530; }",
+        ".ai-section { background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(139,92,246,0.1)); border: 1px solid rgba(96,165,250,0.3); border-radius:12px; padding:20px; margin-top:24px; }",
+        ".ai-section h2 { color:#60a5fa; margin-top:0; }",
+        ".reasoning-box { background:#0b1324; border:1px solid #1f2a44; border-radius:8px; padding:16px; margin-top:12px; line-height:1.6; }",
+        ".reasoning-box p { margin:0; }",
+        ".target-list { list-style:none; padding:0; margin:12px 0 0 0; }",
+        ".target-list li { padding:8px 12px; margin:4px 0; background:#0b1324; border:1px solid #1f2a44; border-radius:6px; }",
+        ".ai-badge { background: linear-gradient(135deg, #3b82f6, #8b5cf6); border: none; }",
+        ".error-box { background:#1f1f1f; border:1px solid #ef4444; border-radius:8px; padding:12px; margin-top:12px; color:#ef4444; }",
         "</style>",
         "</head>",
         "<body>",
@@ -86,6 +98,7 @@ def render_result_html(result: Dict[str, Any]) -> str:
         "    <div class='title'>",
         "      <h1 style='font-size:20px; margin:0;'>WhatSafe - WhatsApp Boycott Detector</h1>",
         "      <span class='badge'>Analysis</span>",
+        ("      <span class='badge ai-badge'>AI Enhanced</span>" if ai_result and 'error' not in ai_result else ""),
         "    </div>",
         "    <div class='grid'>",
         "      <div class='kpi'>",
@@ -141,6 +154,82 @@ def render_result_html(result: Dict[str, Any]) -> str:
         for word, count in target_mentions:
             html_parts.append(f"<li>{word}: {count}</li>")
         html_parts.append("</ul>")
+
+    # Add AI Analysis section if available
+    if ai_result:
+        if "error" in ai_result:
+            # Show error message if AI analysis failed
+            html_parts.append("    <div class='section ai-section'>")
+            html_parts.append("      <h2>🤖 AI Analysis</h2>")
+            html_parts.append("      <div class='error-box'>")
+            html_parts.append(f"        <strong>AI analysis unavailable:</strong> {ai_result.get('detail', 'Unknown error')}")
+            html_parts.append("      </div>")
+            html_parts.append("    </div>")
+        else:
+            # Display AI analysis results
+            boycott_detected = ai_result.get("boycott_detected", False)
+            confidence = ai_result.get("confidence", 0.0)
+            risk_level = ai_result.get("risk_level", "none")
+            reasoning = ai_result.get("reasoning", "")
+            boycott_details = ai_result.get("boycott_details", "")
+            potential_targets = ai_result.get("potential_targets", [])
+            
+            # Map risk level to color
+            risk_color_map = {
+                "none": "ok",
+                "low": "ok", 
+                "medium": "warn",
+                "high": "danger"
+            }
+            risk_color = risk_color_map.get(risk_level.lower(), "ok")
+            
+            html_parts.append("    <div class='section ai-section'>")
+            html_parts.append("      <h2>🤖 AI-Powered Analysis Details</h2>")
+            html_parts.append("      <div class='grid'>")
+            html_parts.append("        <div class='kpi'>")
+            html_parts.append("          <h3>AI Detection</h3>")
+            html_parts.append(f"          <div class='value {'danger' if boycott_detected else 'ok'}'>{'Yes' if boycott_detected else 'No'}</div>")
+            html_parts.append("        </div>")
+            html_parts.append("        <div class='kpi'>")
+            html_parts.append("          <h3>Confidence Score</h3>")
+            html_parts.append(f"          <div class='value'>{confidence:.2f}</div>")
+            html_parts.append("        </div>")
+            html_parts.append("        <div class='kpi'>")
+            html_parts.append("          <h3>AI Risk Level</h3>")
+            html_parts.append(f"          <div class='value {risk_color}'>{risk_level.upper()}</div>")
+            html_parts.append("        </div>")
+            html_parts.append("        <div class='kpi'>")
+            html_parts.append("          <h3>Model</h3>")
+            html_parts.append(f"          <div class='value' style='font-size:14px;'>{ai_result.get('model_used', 'N/A')}</div>")
+            html_parts.append("        </div>")
+            html_parts.append("      </div>")
+            
+            if reasoning:
+                html_parts.append("      <div class='section'>")
+                html_parts.append("        <h3 style='color:#60a5fa; margin-bottom:8px;'>AI Reasoning</h3>")
+                html_parts.append("        <div class='reasoning-box'>")
+                html_parts.append(f"          <p>{reasoning}</p>")
+                html_parts.append("        </div>")
+                html_parts.append("      </div>")
+            
+            if boycott_details:
+                html_parts.append("      <div class='section'>")
+                html_parts.append("        <h3 style='color:#60a5fa; margin-bottom:8px;'>Detailed Findings</h3>")
+                html_parts.append("        <div class='reasoning-box'>")
+                html_parts.append(f"          <p>{boycott_details}</p>")
+                html_parts.append("        </div>")
+                html_parts.append("      </div>")
+            
+            if potential_targets:
+                html_parts.append("      <div class='section'>")
+                html_parts.append("        <h3 style='color:#60a5fa; margin-bottom:8px;'>Potential Targets Identified</h3>")
+                html_parts.append("        <ul class='target-list'>")
+                for target in potential_targets:
+                    html_parts.append(f"          <li>{target}</li>")
+                html_parts.append("        </ul>")
+                html_parts.append("      </div>")
+            
+            html_parts.append("    </div>")
 
     html_parts.append("<div class='footer'>")
     html_parts.append("  <a class='btn' href='/'>Analyze another file</a>")
@@ -238,6 +327,15 @@ async def upload_form() -> str:
                   <input type="file" name="file" accept=".txt" required />
                   <button type="submit">Analyze</button>
                 </div>
+                <div style="margin-top: 12px; padding: 12px; background: rgba(11, 19, 36, 0.5); border: 1px solid #1f2a44; border-radius: 8px;">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--muted); font-size: 14px;">
+                    <input type="checkbox" name="use_ai" value="true" style="cursor: pointer;" />
+                    <span>Also analyze with AI (OpenAI) for detailed insights</span>
+                  </label>
+                  <p style="margin: 8px 0 0 24px; font-size: 12px; color: var(--muted); opacity: 0.8;">
+                    Requires OPENAI_API_KEY to be configured. Provides context-aware analysis with reasoning.
+                  </p>
+                </div>
             </form>
           </div>
         </div>
@@ -247,10 +345,15 @@ async def upload_form() -> str:
 
 
 @app.post("/analyze", response_class=HTMLResponse)
-async def analyze_file_html(file: UploadFile = File(...)) -> HTMLResponse:
+async def analyze_file_html(
+    file: UploadFile = File(...),
+    use_ai: str = Form("false")
+) -> HTMLResponse:
     """
     Receive an uploaded file from the user, send its text content to the
     Detection Service over HTTP, and render the result as an HTML page.
+
+    If use_ai is "true", also calls the AI endpoint for detailed analysis.
 
     Note:
         The UI service does not run detection logic directly.
@@ -263,16 +366,43 @@ async def analyze_file_html(file: UploadFile = File(...)) -> HTMLResponse:
     text_content = content_bytes.decode("utf-8", errors="ignore")
 
     # Call the Detection Service over HTTP (microservice architecture)
+    keyword_result = None
+    ai_result = None
+    
     try:
         async with httpx.AsyncClient() as client:
+            # Always get keyword-based analysis
             response = await client.post(
                 "http://localhost:8001/api/analyze-text",  # Detection Service URL
                 json={"content": text_content},            # JSON payload
                 timeout=20.0,
             )
             response.raise_for_status()
-        # Convert the JSON response into a Python dictionary
-        result: Dict[str, Any] = response.json()
+            keyword_result = response.json()
+            
+            # If AI analysis is requested, also call the AI endpoint
+            if use_ai == "true":
+                try:
+                    ai_response = await client.post(
+                        "http://localhost:8001/api/analyze-text-ai",
+                        json={"content": text_content},
+                        timeout=60.0,  # Longer timeout for AI analysis
+                    )
+                    ai_response.raise_for_status()
+                    ai_result = ai_response.json()
+                except httpx.HTTPStatusError as ai_exc:
+                    # If AI endpoint fails, log but don't fail the whole request
+                    # We'll just show keyword-based results
+                    ai_result = {
+                        "error": "AI analysis unavailable",
+                        "detail": f"Status {ai_exc.response.status_code}: {ai_exc.response.text[:200]}"
+                    }
+                except httpx.RequestError:
+                    ai_result = {
+                        "error": "AI analysis unavailable",
+                        "detail": "Could not reach AI analysis endpoint. Ensure OPENAI_API_KEY is configured."
+                    }
+                    
     except httpx.RequestError as exc:
         error_html = (
             "<h1>Detection Service Unavailable</h1>"
@@ -288,8 +418,8 @@ async def analyze_file_html(file: UploadFile = File(...)) -> HTMLResponse:
         )
         return HTMLResponse(content=error_html, status_code=502)
 
-    # Render HTML using the analysis result
-    html = render_result_html(result)
+    # Render HTML using the analysis result(s)
+    html = render_result_html(keyword_result, ai_result=ai_result)
     return HTMLResponse(content=html)
 
 
