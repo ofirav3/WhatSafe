@@ -7,15 +7,20 @@ WhatSafe is a small demo app that analyzes exported WhatsApp group chats and sur
 - Computes per‑sender statistics (messages, characters, boycott‑related messages)
 - Aggregates simple signals into a risk score and label
 - Guesses a potential target name from boycott‑related messages
+- **AI-powered analysis** using OpenAI's LLM for context-aware detection (optional)
 - Renders a modern UI with KPIs, a styled table, and charts
 
 ## Service split (Why two services?)
 - Detection Service (FastAPI, port 8001)
   - API: `POST /api/analyze-text` accepts `{ "content": "..." }`
+    - Uses keyword-based detection (fast, explainable)
+  - API: `POST /api/analyze-text-ai` accepts `{ "content": "..." }`
+    - Uses OpenAI LLM for sophisticated context-aware analysis (requires OPENAI_API_KEY)
   - Runs the core domain logic and returns JSON
 - UI Service (FastAPI, port 8002)
   - Serves a minimal landing page (upload form + instructions)
   - Calls the Detection Service and renders an HTML results page with charts
+  - Optional AI analysis section with detailed reasoning and findings
 
 Core logic is kept in `whatsafe_detector.py` (pure Python, easy to test). The services are thin shells around it.
 
@@ -28,6 +33,13 @@ python3 -m venv .venv
 ./.venv/bin/pip install --upgrade pip
 ./.venv/bin/pip install -r requirements.txt
 
+# Optional: Set up OpenAI API key for AI-powered analysis
+# Create a .env file in the project root with:
+#   OPENAI_API_KEY=your-api-key-here
+# Or export it as an environment variable:
+#   export OPENAI_API_KEY=your-api-key-here
+# Get your API key from: https://platform.openai.com/api-keys
+
 # 1) Start the Detection Service (port 8001)
 ./.venv/bin/python detection_service.py
 
@@ -37,6 +49,8 @@ python3 -m venv .venv
 
 Open the UI at `http://localhost:8002`, choose a WhatsApp `.txt` file (e.g., `whatsapp_group_sample.txt` in the repo), and click Analyze.
 
+**For detailed setup instructions, see [SETUP_GUIDE.md](SETUP_GUIDE.md)**
+
 ### Exporting a WhatsApp group chat (without media)
 1) Open WhatsApp and go to the group chat
 2) Tap the group name to open Group Info
@@ -45,11 +59,28 @@ Open the UI at `http://localhost:8002`, choose a WhatsApp `.txt` file (e.g., `wh
 5) Save the `.txt` to your computer, then upload it in the UI
 
 ### Optional: Call the API directly
+
+**Keyword-based analysis (default):**
 ```bash
 curl -X POST http://localhost:8001/api/analyze-text \
   -H "Content-Type: application/json" \
   -d '{"content":"01/01/25, 12:00 - John: היי"}'
 ```
+
+**AI-powered analysis (requires OPENAI_API_KEY):**
+```bash
+curl -X POST http://localhost:8001/api/analyze-text-ai \
+  -H "Content-Type: application/json" \
+  -d '{"content":"01/01/25, 12:00 - John: היי"}'
+```
+
+The AI endpoint provides:
+- Context-aware detection (not just keyword matching)
+- Confidence scores and detailed reasoning
+- Better identification of potential boycott targets
+- More nuanced risk assessment
+
+**Note:** The AI endpoint requires an OpenAI API key. Get one from [OpenAI](https://platform.openai.com/api-keys) and set it as an environment variable or in a `.env` file.
 
 ## Tests
 ```bash
@@ -65,6 +96,8 @@ cd path/to/WhatSafe
 - python‑multipart – file uploads in UI
 - pandas – formatting the per‑sender table
 - Chart.js (CDN) – charts in the UI
+- openai – OpenAI API client for AI-powered analysis
+- python-dotenv – load environment variables from .env file
 
 ## Code overview
 - `whatsafe_detector.py` (core logic)
@@ -75,11 +108,13 @@ cd path/to/WhatSafe
   - `detect_potential_target` – simple frequency heuristic over boycott messages
   - `analyze_whatsapp_text_export` – orchestration helper used by API
 - `detection_service.py` (API)
-  - `POST /api/analyze-text` – returns analysis JSON
+  - `POST /api/analyze-text` – returns analysis JSON (keyword-based)
+  - `POST /api/analyze-text-ai` – returns AI-powered analysis JSON (requires OPENAI_API_KEY)
   - Logs exceptions and returns a minimal error JSON if something goes wrong
 - `ui_service.py` (UI)
   - Landing page with upload + instructions (animated background)
   - Results page: KPIs, pandas HTML table, Chart.js bar charts
+  - Optional AI analysis section with detailed reasoning and findings
 - `tests/test_whatsafe.py` – unit tests (parsing, stats, scoring, full analysis, API)
 
 ## What’s missing for production
@@ -108,7 +143,7 @@ This demo is intentionally simple. A production‑grade version would need:
   - Accessibility review, mobile layout polish
 
 - Model/Logic
-  - The current approach is explainable and keyword‑based. For a robust product, consider ML/NLP (while preserving explainability), better target extraction, and language packs. Add human‑in‑the‑loop review where appropriate.
+  - The current approach includes both keyword‑based detection (explainable and fast) and optional AI-powered analysis using OpenAI's LLM (context-aware and nuanced). For a robust product, consider additional ML/NLP models, better target extraction, and language packs. Add human‑in‑the‑loop review where appropriate.
 
 ## Notes worth reading
 - The logic is deliberately transparent (regex + simple stats) so it’s easy to audit.
