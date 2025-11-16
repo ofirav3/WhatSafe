@@ -51,21 +51,7 @@ def test_full_analysis_helper():
     assert "risk_signals" in result and "per_sender_stats" in result
 
 
-def test_detection_service_endpoint():
-    from detection_service import app
-    from starlette.testclient import TestClient
-
-    client = TestClient(app)
-    payload = {"content": "\n".join(sample_lines())}
-    r = client.post("/api/analyze-text", json=payload)
-    assert r.status_code == 200
-    data = r.json()
-    # Either a valid result or structured error from our handler
-    assert isinstance(data, dict)
-    if "error" in data:
-        # Should include detail
-        assert "detail" in data
-    else:
-        assert "risk_signals" in data and "per_sender_stats" in data
+# The project now uses a NestJS server as the primary API.
+# Python API endpoint tests have been removed.
 
 

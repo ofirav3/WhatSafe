@@ -13,6 +13,7 @@ import os  # For environment variables
 import json  # For parsing JSON responses
 
 from fastapi import FastAPI, HTTPException  # FastAPI web framework
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel  # For request body validation
 from openai import OpenAI  # OpenAI API client
 from dotenv import load_dotenv  # Load environment variables from .env file
@@ -60,6 +61,18 @@ app = FastAPI(
     title="Whatsafe Detection Service",
     description="Microservice that analyzes WhatsApp text for boycott risk.",
     version="1.0.0",
+)
+
+# CORS for local frontend dev (Vite on 5173 and legacy UI on 8002)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Basic logger

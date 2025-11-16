@@ -19,8 +19,12 @@ __pycache__/
 # Distribution / packaging
 build/
 dist/
+server/dist/
 *.egg-info/
 .eggs/
+
+# Node
+node_modules/
 
 # IDE
 .vscode/

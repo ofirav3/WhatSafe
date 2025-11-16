@@ -10,17 +10,16 @@ WhatSafe is a small demo app that analyzes exported WhatsApp group chats and sur
 - **AI-powered analysis** using OpenAI's LLM for context-aware detection (optional)
 - Renders a modern UI with KPIs, a styled table, and charts
 
-## Service split (Why two services?)
+## Architecture
 - Detection Service (FastAPI, port 8001)
   - API: `POST /api/analyze-text` accepts `{ "content": "..." }`
     - Uses keyword-based detection (fast, explainable)
   - API: `POST /api/analyze-text-ai` accepts `{ "content": "..." }`
     - Uses OpenAI LLM for sophisticated context-aware analysis (requires OPENAI_API_KEY)
   - Runs the core domain logic and returns JSON
-- UI Service (FastAPI, port 8002)
-  - Serves a minimal landing page (upload form + instructions)
-  - Calls the Detection Service and renders an HTML results page with charts
-  - Optional AI analysis section with detailed reasoning and findings
+- Frontend (React + TypeScript + Vite, port 5173 during dev)
+  - TailwindCSS styles and shadcn-style components
+  - Uploads WhatsApp `.txt` and renders results
 
 Core logic is kept in `whatsafe_detector.py` (pure Python, easy to test). The services are thin shells around it.
 
@@ -43,11 +42,31 @@ python3 -m venv .venv
 # 1) Start the Detection Service (port 8001)
 ./.venv/bin/python detection_service.py
 
-# 2) In another terminal, start the UI Service (port 8002)
-./.venv/bin/python ui_service.py
+# 2) Start the React frontend in another terminal
+cd ./frontend
+npm install
+npm run dev
 ```
 
-Open the UI at `http://localhost:8002`, choose a WhatsApp `.txt` file (e.g., `whatsapp_group_sample.txt` in the repo), and click Analyze.
+Open the React UI at `http://localhost:5173`, choose a WhatsApp `.txt` file (e.g., `whatsapp_group_sample.txt` in the repo), and click Analyze.
+
+## New React + TypeScript frontend (optional, modern UI)
+We added a new React app under `frontend/` using Vite, TailwindCSS and shadcn-style components. It talks directly to the Detection Service.
+
+### Run the React app
+```bash
+cd "./frontend"
+npm install
+npm run dev
+```
+Open `http://localhost:5173`. Choose a `.txt` file and optionally select an AI backend (if configured on the server). The Detection Service already has CORS enabled for localhost:5173.
+
+Notes:
+- The React UI calls:
+  - `POST http://localhost:8001/api/analyze-text` (always)
+  - `POST http://localhost:8001/api/analyze-text-ai` (if OpenAI selected)
+  - `POST http://localhost:8001/api/analyze-text-claude` (if Claude added later)
+- Ensure `OPENAI_API_KEY` is set in `.env` on the server if you want the OpenAI AI endpoint.
 
 **For detailed setup instructions, see [SETUP_GUIDE.md](SETUP_GUIDE.md)**
 
@@ -89,15 +108,17 @@ cd path/to/WhatSafe
 ```
 
 ## Libraries used
-- FastAPI – web framework for Detection and UI services
-- Uvicorn – ASGI server
-- httpx – UI service calls Detection service
-- pydantic – request models
-- python‑multipart – file uploads in UI
-- pandas – formatting the per‑sender table
-- Chart.js (CDN) – charts in the UI
-- openai – OpenAI API client for AI-powered analysis
-- python-dotenv – load environment variables from .env file
+- Backend
+  - FastAPI – web framework (Detection Service)
+  - Uvicorn – ASGI server
+  - pydantic – request models
+  - openai – OpenAI API client for AI-powered analysis
+  - python-dotenv – load environment variables from .env file
+- Frontend
+  - React + TypeScript – UI
+  - Vite – dev/build tooling
+  - TailwindCSS – styling
+  - clsx, sonner – small UI helpers
 
 ## Code overview
 - `whatsafe_detector.py` (core logic)
@@ -111,10 +132,9 @@ cd path/to/WhatSafe
   - `POST /api/analyze-text` – returns analysis JSON (keyword-based)
   - `POST /api/analyze-text-ai` – returns AI-powered analysis JSON (requires OPENAI_API_KEY)
   - Logs exceptions and returns a minimal error JSON if something goes wrong
-- `ui_service.py` (UI)
-  - Landing page with upload + instructions (animated background)
-  - Results page: KPIs, pandas HTML table, Chart.js bar charts
-  - Optional AI analysis section with detailed reasoning and findings
+- `frontend/` (React UI)
+  - Vite React + TypeScript app (TailwindCSS)
+  - Uploads WhatsApp `.txt`, renders results, optional AI section
 - `tests/test_whatsafe.py` – unit tests (parsing, stats, scoring, full analysis, API)
 
 ## What’s missing for production
