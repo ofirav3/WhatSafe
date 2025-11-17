@@ -51,7 +51,7 @@ npm run dev
 Open the React UI at `http://localhost:5173`, choose a WhatsApp `.txt` file (e.g., `whatsapp_group_sample.txt` in the repo), and click Analyze.
 
 ## New React + TypeScript frontend (optional, modern UI)
-We added a new React app under `frontend/` using Vite, TailwindCSS and shadcn-style components. It talks directly to the Detection Service.
+We added a new React app under `frontend/` using Vite, TailwindCSS, shadcn/ui components (Radix + class-variance-authority), React Query for data fetching, and lucide-react icons. It talks directly to the backend.
 
 ### Run the React app
 ```bash
@@ -62,11 +62,11 @@ npm run dev
 Open `http://localhost:5173`. Choose a `.txt` file and optionally select an AI backend (if configured on the server). The Detection Service already has CORS enabled for localhost:5173.
 
 Notes:
-- The React UI calls:
-  - `POST http://localhost:8001/api/analyze-text` (always)
-  - `POST http://localhost:8001/api/analyze-text-ai` (if OpenAI selected)
-  - `POST http://localhost:8001/api/analyze-text-claude` (if Claude added later)
-- Ensure `OPENAI_API_KEY` is set in `.env` on the server if you want the OpenAI AI endpoint.
+- The React UI calls the NestJS server (`server/`):
+  - `POST http://localhost:3000/api/analyze-text` – proxies to the Python detection service for keyword heuristics
+  - `POST http://localhost:3000/api/analyze-text-ai` – runs OpenAI analysis natively in Node
+- The Python FastAPI detection service (port 8001) still powers the keyword heuristics. We plan to port that logic to NestJS to remove the Python dependency altogether.
+- Ensure `OPENAI_API_KEY` is set in `server/.env` for AI analysis.
 
 **For detailed setup instructions, see [SETUP_GUIDE.md](SETUP_GUIDE.md)**
 
@@ -108,17 +108,23 @@ cd path/to/WhatSafe
 ```
 
 ## Libraries used
-- Backend
-  - FastAPI – web framework (Detection Service)
+- Backend (Python)
+  - FastAPI – legacy keyword detection service (proxied by NestJS)
   - Uvicorn – ASGI server
   - pydantic – request models
   - openai – OpenAI API client for AI-powered analysis
   - python-dotenv – load environment variables from .env file
+- Backend (Node/NestJS)
+  - NestJS – REST API (proxy to Python + native AI endpoints)
+  - openai (Node SDK) – AI analysis
+  - class-validator / class-transformer – request validation
 - Frontend
   - React + TypeScript – UI
   - Vite – dev/build tooling
-  - TailwindCSS – styling
-  - clsx, sonner – small UI helpers
+  - TailwindCSS + shadcn/ui (Radix primitives, class-variance-authority, tailwind-merge)
+  - @tanstack/react-query – data fetching/caching
+  - lucide-react – icons
+  - sonner – (optional) toast notifications
 
 ## Code overview
 - `whatsafe_detector.py` (core logic)
